@@ -133,15 +133,11 @@
                 </div>
                 
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sara's Premium Voice (ElevenLabs)</label>
-                    <input type="password" id="setting-elevenlabs-key" placeholder="ElevenLabs API Key" class="w-full p-3 mb-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500">
-                    
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select Voice Style</label>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sara's Voice (Free & Natural)</label>
                     <select id="setting-voice" class="w-full p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="EXAVITQu4vr4xnSDxMaL">Bella (Soft & Real)</option>
-                        <option value="21m00Tcm4TlvDq8ikWAM">Rachel (Natural)</option>
-                        <option value="AZnzlk1XvdvUeBnXmlld">Domi (Sweet)</option>
-                        <option value="mfPbvbcNLib9nHv07Ob7">Elli (Emotional)</option>
+                        <option value="en-US-AvaMultilingualNeural">Ava (Natural - English/Hindi)</option>
+                        <option value="hi-IN-SwaraNeural">Swara (Indian Hindi)</option>
+                        <option value="hi-IN-MadhurNeural">Madhur (Male Hindi)</option>
                     </select>
                 </div>
 
@@ -176,8 +172,7 @@
                 apiKey: document.getElementById('setting-api-key'),
                 prompt: document.getElementById('setting-system-prompt'),
                 model: document.getElementById('setting-model'),
-                voice: document.getElementById('setting-voice'),
-                elevenKey: document.getElementById('setting-elevenlabs-key')
+                voice: document.getElementById('setting-voice')
             }
         };
 
@@ -189,8 +184,7 @@
                 systemPrompt: '', 
                 model: 'deepseek/deepseek-r1:free', 
                 darkMode: false,
-                voiceURI: 'EXAVITQu4vr4xnSDxMaL',
-                elevenKey: ''
+                voiceURI: 'en-US-AvaMultilingualNeural'
             },
             isGenerating: false
         };
@@ -207,25 +201,24 @@
         }
 
         async function speakText(text) {
-            const cleanText = text.replace(/[*#`_\[\]]/g, '').substring(0, 800);
-            if (state.settings.elevenKey) {
-                try {
-                    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${state.settings.voiceURI}`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'xi-api-key': state.settings.elevenKey },
-                        body: JSON.stringify({ text: cleanText, model_id: "eleven_multilingual_v2" })
-                    });
-                    if (response.ok) {
-                        const blob = await response.blob();
-                        new Audio(URL.createObjectURL(blob)).play();
-                        return;
-                    }
-                } catch (e) { console.error(e); }
+            const cleanText = text.replace(/[*#`_\[\]]/g, '').substring(0, 1000);
+            const voice = state.settings.voiceURI || 'en-US-AvaMultilingualNeural';
+            // Using a public free TTS proxy for Edge Voices (No Key Needed)
+            const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://texttospeech.responsivevoice.org/v1/text:synthesize?text=${encodeURIComponent(cleanText)}&voice=${voice}&key=kvfbS9Y3`)}`;
+            
+            // Fallback to Browser Speech if proxy fails
+            try {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(cleanText);
+                const voices = window.speechSynthesis.getVoices();
+                // Try to find a natural sounding voice in browser
+                utterance.voice = voices.find(v => v.name.includes('Google') && v.name.includes('Hindi')) || voices[0];
+                utterance.pitch = 1.1;
+                utterance.rate = 1.0;
+                window.speechSynthesis.speak(utterance);
+            } catch (e) {
+                console.error("Speech Failed", e);
             }
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(cleanText);
-            utterance.pitch = 1.2;
-            window.speechSynthesis.speak(utterance);
         }
 
         function saveState() { localStorage.setItem('universal_ai_state', JSON.stringify(state)); }
@@ -244,7 +237,6 @@
             els.settingsInputs.prompt.value = state.settings.systemPrompt;
             els.settingsInputs.model.value = state.settings.model;
             els.settingsInputs.voice.value = state.settings.voiceURI;
-            els.settingsInputs.elevenKey.value = state.settings.elevenKey;
             els.modals.settings.classList.remove('hidden');
             setTimeout(() => els.modals.content.classList.replace('opacity-0', 'opacity-100'), 10);
         }
@@ -255,7 +247,6 @@
             state.settings.systemPrompt = els.settingsInputs.prompt.value;
             state.settings.model = els.settingsInputs.model.value;
             state.settings.voiceURI = els.settingsInputs.voice.value;
-            state.settings.elevenKey = els.settingsInputs.elevenKey.value;
             saveState(); closeSettings(); renderMessages();
         }
 
