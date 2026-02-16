@@ -133,11 +133,12 @@
                 </div>
                 
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sara's Voice (Free & Natural)</label>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sara's Voice (High Quality - Free)</label>
                     <select id="setting-voice" class="w-full p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="en-US-AvaMultilingualNeural">Ava (Natural - English/Hindi)</option>
-                        <option value="hi-IN-SwaraNeural">Swara (Indian Hindi)</option>
-                        <option value="hi-IN-MadhurNeural">Madhur (Male Hindi)</option>
+                        <option value="Raveena">Raveena (Indian - Best for Hindi/Eng)</option>
+                        <option value="Aditi">Aditi (Indian - Hindi)</option>
+                        <option value="Joanna">Joanna (US English - Soft)</option>
+                        <option value="Brian">Brian (British - Professional)</option>
                     </select>
                 </div>
 
@@ -184,7 +185,7 @@
                 systemPrompt: '', 
                 model: 'deepseek/deepseek-r1:free', 
                 darkMode: false,
-                voiceURI: 'en-US-AvaMultilingualNeural'
+                voiceURI: 'Raveena'
             },
             isGenerating: false
         };
@@ -200,25 +201,20 @@
             }, 500);
         }
 
-        async function speakText(text) {
-            const cleanText = text.replace(/[*#`_\[\]]/g, '').substring(0, 1000);
-            const voice = state.settings.voiceURI || 'en-US-AvaMultilingualNeural';
-            // Using a public free TTS proxy for Edge Voices (No Key Needed)
-            const url = `https://api.allorigins.win/raw?url=${encodeURIComponent(`https://texttospeech.responsivevoice.org/v1/text:synthesize?text=${encodeURIComponent(cleanText)}&voice=${voice}&key=kvfbS9Y3`)}`;
+        function speakText(text) {
+            // Using StreamElements API (Free, High Quality, No Key)
+            const cleanText = text.replace(/[*#`_\[\]]/g, '').substring(0, 500);
+            if(!cleanText) return;
             
-            // Fallback to Browser Speech if proxy fails
-            try {
-                window.speechSynthesis.cancel();
-                const utterance = new SpeechSynthesisUtterance(cleanText);
-                const voices = window.speechSynthesis.getVoices();
-                // Try to find a natural sounding voice in browser
-                utterance.voice = voices.find(v => v.name.includes('Google') && v.name.includes('Hindi')) || voices[0];
-                utterance.pitch = 1.1;
-                utterance.rate = 1.0;
-                window.speechSynthesis.speak(utterance);
-            } catch (e) {
-                console.error("Speech Failed", e);
-            }
+            const voice = state.settings.voiceURI || 'Raveena';
+            const audio = new Audio(`https://api.streamelements.com/kappa/v2/speech?voice=${voice}&text=${encodeURIComponent(cleanText)}`);
+            
+            audio.play().catch(e => {
+                console.warn("StreamElements TTS failed, switching to backup.");
+                // Fallback to Google Translate TTS if StreamElements fails
+                const googleAudio = new Audio(`https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(cleanText)}&tl=hi&client=tw-ob`);
+                googleAudio.play();
+            });
         }
 
         function saveState() { localStorage.setItem('universal_ai_state', JSON.stringify(state)); }
