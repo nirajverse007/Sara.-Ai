@@ -133,22 +133,16 @@
                 </div>
                 
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sara's Voice</label>
-                    <div class="flex gap-2">
-                        <select id="setting-voice" class="flex-1 p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500">
-                            <option value="">Loading All Voices...</option>
-                        </select>
-                        <button onclick="app.testVoice()" class="p-3 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600" title="Test Voice">
-                            <i class="fas fa-volume-up"></i>
-                        </button>
-                    </div>
-                    <div class="flex items-center mt-2 justify-between">
-                        <div class="flex items-center">
-                            <input type="checkbox" id="setting-voice-enabled" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
-                            <label for="setting-voice-enabled" class="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">Enable Voice</label>
-                        </div>
-                        <a href="https://play.google.com/store/apps/details?id=com.google.android.tts" target="_blank" class="text-xs text-blue-500 hover:underline">Install Voice Pack</a>
-                    </div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sara's Premium Voice (ElevenLabs)</label>
+                    <input type="password" id="setting-elevenlabs-key" placeholder="ElevenLabs API Key" class="w-full p-3 mb-2 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500">
+                    
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Select Voice Style</label>
+                    <select id="setting-voice" class="w-full p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="EXAVITQu4vr4xnSDxMaL">Bella (Soft & Real)</option>
+                        <option value="21m00Tcm4TlvDq8ikWAM">Rachel (Natural)</option>
+                        <option value="AZnzlk1XvdvUeBnXmlld">Domi (Sweet)</option>
+                        <option value="mfPbvbcNLib9nHv07Ob7">Elli (Emotional)</option>
+                    </select>
                 </div>
 
                 <div>
@@ -165,13 +159,6 @@
 </div>
 
 <script>
-    // Service Worker Registration for PWA
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('sw.js').catch(err => console.log('SW registration failed:', err));
-        });
-    }
-
     const app = (() => {
         const els = {
             loading: document.getElementById('loading'),
@@ -190,7 +177,7 @@
                 prompt: document.getElementById('setting-system-prompt'),
                 model: document.getElementById('setting-model'),
                 voice: document.getElementById('setting-voice'),
-                voiceEnabled: document.getElementById('setting-voice-enabled')
+                elevenKey: document.getElementById('setting-elevenlabs-key')
             }
         };
 
@@ -202,184 +189,103 @@
                 systemPrompt: '', 
                 model: 'deepseek/deepseek-r1:free', 
                 darkMode: false,
-                voiceURI: '',
-                voiceEnabled: true
+                voiceURI: 'EXAVITQu4vr4xnSDxMaL',
+                elevenKey: ''
             },
-            isGenerating: false,
-            availableVoices: []
+            isGenerating: false
         };
 
         function init() {
             loadState();
-            marked.setOptions({
-                highlight: (code, lang) => highlight.getLanguage(lang) ? highlight.highlight(code, { language: lang }).value : highlight.highlightAuto(code).value,
-                breaks: true
-            });
             applyTheme();
             renderChatList();
             renderMessages();
-            initVoiceSystem(); 
             setTimeout(() => {
                 els.loading.classList.add('hidden');
                 els.app.classList.remove('hidden', 'opacity-0');
             }, 500);
         }
 
-        // Voice System Logic - UPDATED: Shows ALL voices
-        function initVoiceSystem() {
-            const populateVoices = () => {
-                const allVoices = window.speechSynthesis.getVoices();
-                
-                // Sort to bring English/Google voices to top, but include EVERYONE
-                allVoices.sort((a, b) => {
-                    const aScore = (a.name.includes('Google') || a.name.includes('Female') || a.lang.includes('en-US')) ? 1 : 0;
-                    const bScore = (b.name.includes('Google') || b.name.includes('Female') || b.lang.includes('en-US')) ? 1 : 0;
-                    return bScore - aScore;
-                });
-
-                state.availableVoices = allVoices; 
-                
-                els.settingsInputs.voice.innerHTML = '';
-                
-                if (state.availableVoices.length === 0) {
-                     const opt = document.createElement('option');
-                     opt.text = "No Voices Found (Install Google TTS)";
-                     els.settingsInputs.voice.appendChild(opt);
-                     return;
-                }
-
-                state.availableVoices.forEach(v => {
-                    const opt = document.createElement('option');
-                    opt.value = v.voiceURI;
-                    // Add emoji if it looks like a high quality voice
-                    let prefix = "";
-                    if(v.name.includes("Google") || v.name.includes("Siri")) prefix = "⭐ ";
-                    opt.text = `${prefix}${v.name} (${v.lang})`;
-                    els.settingsInputs.voice.appendChild(opt);
-                });
-
-                // Set saved voice or default
-                if (state.settings.voiceURI && state.availableVoices.find(v => v.voiceURI === state.settings.voiceURI)) {
-                    els.settingsInputs.voice.value = state.settings.voiceURI;
-                }
-            };
-
-            window.speechSynthesis.onvoiceschanged = populateVoices;
-            populateVoices(); // Try immediately too
-        }
-
-        function testVoice() {
-            const voiceURI = els.settingsInputs.voice.value;
-            const voice = state.availableVoices.find(v => v.voiceURI === voiceURI);
-            if (!voice) return alert("Please select a voice first. If empty, install 'Speech Services by Google' from Play Store.");
-            
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance("Hello Sir, I am Sara. Do you like this voice?");
-            utterance.voice = voice;
-            
-            // Adjust pitch to make it sound slightly more feminine if generic voice
-            utterance.pitch = 1.1; 
-            utterance.rate = 1.0;
-            window.speechSynthesis.speak(utterance);
-        }
-
-        function speakText(text) {
-            if (!state.settings.voiceEnabled || !text) return;
-
-            const cleanText = text.replace(/[*#`_\[\]]/g, '').substring(0, 300); // Limit length for stability
-            
+        async function speakText(text) {
+            const cleanText = text.replace(/[*#`_\[\]]/g, '').substring(0, 800);
+            if (state.settings.elevenKey) {
+                try {
+                    const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${state.settings.voiceURI}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'xi-api-key': state.settings.elevenKey },
+                        body: JSON.stringify({ text: cleanText, model_id: "eleven_multilingual_v2" })
+                    });
+                    if (response.ok) {
+                        const blob = await response.blob();
+                        new Audio(URL.createObjectURL(blob)).play();
+                        return;
+                    }
+                } catch (e) { console.error(e); }
+            }
             window.speechSynthesis.cancel();
             const utterance = new SpeechSynthesisUtterance(cleanText);
-            
-            const voice = state.availableVoices.find(v => v.voiceURI === state.settings.voiceURI);
-            if (voice) utterance.voice = voice;
-            
-            // Tweak pitch/rate for better female effect on robotic voices
-            utterance.pitch = 1.15; // Higher pitch = more feminine
-            utterance.rate = 1.05;  // Slightly faster
-            
+            utterance.pitch = 1.2;
             window.speechSynthesis.speak(utterance);
         }
 
-        function saveState() {
-            localStorage.setItem('universal_ai_state', JSON.stringify(state));
-        }
-
-        function loadState() {
-            const saved = localStorage.getItem('universal_ai_state');
-            if (saved) state = { ...state, ...JSON.parse(saved) };
-        }
+        function saveState() { localStorage.setItem('universal_ai_state', JSON.stringify(state)); }
+        function loadState() { const saved = localStorage.getItem('universal_ai_state'); if (saved) state = { ...state, ...JSON.parse(saved) }; }
 
         function applyTheme() {
             document.documentElement.classList.toggle('dark', state.settings.darkMode);
             els.themeIcon.className = state.settings.darkMode ? 'fas fa-sun' : 'fas fa-moon';
         }
 
-        function toggleDarkMode() {
-            state.settings.darkMode = !state.settings.darkMode;
-            applyTheme();
-            saveState();
-        }
-
-        function toggleSidebar() {
-            els.sidebar.classList.toggle('-translate-x-full');
-            document.getElementById('sidebar-overlay').classList.toggle('hidden');
-        }
+        function toggleDarkMode() { state.settings.darkMode = !state.settings.darkMode; applyTheme(); saveState(); }
+        function toggleSidebar() { els.sidebar.classList.toggle('-translate-x-full'); document.getElementById('sidebar-overlay').classList.toggle('hidden'); }
 
         function openSettings() {
             els.settingsInputs.apiKey.value = state.settings.apiKey;
             els.settingsInputs.prompt.value = state.settings.systemPrompt;
             els.settingsInputs.model.value = state.settings.model;
             els.settingsInputs.voice.value = state.settings.voiceURI;
-            els.settingsInputs.voiceEnabled.checked = state.settings.voiceEnabled;
-
+            els.settingsInputs.elevenKey.value = state.settings.elevenKey;
             els.modals.settings.classList.remove('hidden');
-            setTimeout(() => els.modals.content.classList.replace('scale-95', 'scale-100'), 10);
             setTimeout(() => els.modals.content.classList.replace('opacity-0', 'opacity-100'), 10);
-            
-            if(state.availableVoices.length === 0) initVoiceSystem();
         }
 
-        function closeSettings() {
-            els.modals.content.classList.replace('scale-100', 'scale-95');
-            els.modals.content.classList.replace('opacity-100', 'opacity-0');
-            setTimeout(() => els.modals.settings.classList.add('hidden'), 200);
-        }
-
+        function closeSettings() { els.modals.settings.classList.add('hidden'); }
         function saveSettings() {
-            state.settings.apiKey = els.settingsInputs.apiKey.value.trim();
-            state.settings.systemPrompt = els.settingsInputs.prompt.value.trim();
-            state.settings.model = els.settingsInputs.model.value.trim();
+            state.settings.apiKey = els.settingsInputs.apiKey.value;
+            state.settings.systemPrompt = els.settingsInputs.prompt.value;
+            state.settings.model = els.settingsInputs.model.value;
             state.settings.voiceURI = els.settingsInputs.voice.value;
-            state.settings.voiceEnabled = els.settingsInputs.voiceEnabled.checked;
-            saveState();
-            closeSettings();
-            renderMessages();
+            state.settings.elevenKey = els.settingsInputs.elevenKey.value;
+            saveState(); closeSettings(); renderMessages();
         }
 
         function createNewChat() {
-            const newChat = { id: Date.now().toString(), title: 'New Chat', messages: [], timestamp: Date.now() };
-            state.chats.unshift(newChat);
-            state.currentChatId = newChat.id;
-            renderChatList();
-            renderMessages();
-            saveState();
+            const id = Date.now().toString();
+            state.chats.unshift({ id, title: 'New Chat', messages: [] });
+            state.currentChatId = id;
+            renderChatList(); renderMessages(); saveState();
+        }
+
+        function deleteChat(id, e) {
+            e.stopPropagation();
+            state.chats = state.chats.filter(c => c.id !== id);
+            if (state.currentChatId === id) state.currentChatId = state.chats[0]?.id || null;
+            renderChatList(); renderMessages(); saveState();
+        }
+
+        function renameChat(id) {
+            const chat = state.chats.find(c => c.id === id);
+            const newTitle = prompt("Enter new title:", chat.title);
+            if (newTitle) { chat.title = newTitle; renderChatList(); saveState(); }
         }
 
         async function sendMessage() {
             const text = els.input.value.trim();
             if (!text || state.isGenerating) return;
-            if (!state.settings.apiKey) return alert("Please enter API Key in Settings!");
-            
-            window.speechSynthesis.cancel();
-
             if (!state.currentChatId) createNewChat();
             const chat = state.chats.find(c => c.id === state.currentChatId);
-            
-            if (chat.messages.length === 0) chat.title = text.slice(0, 30);
             chat.messages.push({ role: 'user', content: text });
             els.input.value = '';
-            
             const aiMsg = { role: 'assistant', content: '', id: 'ai-' + Date.now(), pending: true };
             chat.messages.push(aiMsg);
             renderMessages();
@@ -389,17 +295,10 @@
                 const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
                     method: "POST",
                     headers: { "Authorization": `Bearer ${state.settings.apiKey}`, "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        model: state.settings.model,
-                        messages: [{ role: "system", content: state.settings.systemPrompt }, ...chat.messages.filter(m => !m.pending)],
-                        stream: true
-                    })
+                    body: JSON.stringify({ model: state.settings.model, messages: [{ role: "system", content: state.settings.systemPrompt }, ...chat.messages.filter(m => !m.pending)], stream: true })
                 });
-
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
-                const contentDiv = document.getElementById(aiMsg.id).querySelector('.prose');
-
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
@@ -408,36 +307,31 @@
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
                             try {
-                                const data = JSON.parse(line.slice(6));
-                                const content = data.choices[0]?.delta?.content || "";
+                                const content = JSON.parse(line.slice(6)).choices[0]?.delta?.content || "";
                                 aiMsg.content += content;
-                                contentDiv.innerHTML = marked.parse(aiMsg.content);
-                                contentDiv.querySelectorAll('pre code').forEach(b => highlight.highlightElement(b));
+                                document.getElementById(aiMsg.id).querySelector('.prose').innerHTML = marked.parse(aiMsg.content);
                                 els.messagesContainer.scrollTop = els.messagesContainer.scrollHeight;
                             } catch(e) {}
                         }
                     }
                 }
-                
-                speakText(aiMsg.content);
-
-            } catch (err) {
-                aiMsg.content = "Error: " + err.message;
-            } finally {
-                aiMsg.pending = false;
-                state.isGenerating = false;
-                saveState();
-                renderMessages();
-            }
+            } catch (err) { aiMsg.content = "Error: " + err.message; }
+            aiMsg.pending = false; state.isGenerating = false; saveState(); renderMessages();
         }
 
         function renderChatList() {
             els.chatList.innerHTML = '';
             state.chats.forEach(chat => {
                 const item = document.createElement('div');
-                item.className = `p-3 rounded-full cursor-pointer truncate mb-1 ${chat.id === state.currentChatId ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600' : 'hover:bg-gray-200 dark:hover:bg-gray-800'}`;
-                item.innerHTML = `<i class="far fa-comment-dots mr-2"></i> ${chat.title}`;
-                item.onclick = () => { state.currentChatId = chat.id; renderMessages(); if(window.innerWidth < 768) toggleSidebar(); };
+                item.className = `flex items-center justify-between p-3 rounded-xl cursor-pointer mb-1 ${chat.id === state.currentChatId ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600' : 'hover:bg-gray-200 dark:hover:bg-gray-800'}`;
+                item.innerHTML = `
+                    <div class="flex-1 truncate pr-2" onclick="app.selectChat('${chat.id}')">
+                        <i class="far fa-comment-dots mr-2"></i> ${chat.title}
+                    </div>
+                    <div class="flex gap-2">
+                        <i class="fas fa-edit text-xs opacity-50 hover:opacity-100" onclick="app.renameChat('${chat.id}')"></i>
+                        <i class="fas fa-trash text-xs opacity-50 hover:text-red-500" onclick="app.deleteChat('${chat.id}', event)"></i>
+                    </div>`;
                 els.chatList.appendChild(item);
             });
         }
@@ -445,28 +339,31 @@
         function renderMessages() {
             els.modelDisplay.innerText = state.settings.model.split('/').pop();
             els.messagesContainer.innerHTML = '';
-            if (!state.currentChatId || state.chats.find(c => c.id === state.currentChatId).messages.length === 0) {
-                els.messagesContainer.appendChild(els.welcomeScreen);
-                return;
+            if (!state.currentChatId || !state.chats.find(c => c.id === state.currentChatId).messages.length) {
+                els.messagesContainer.appendChild(els.welcomeScreen); return;
             }
             state.chats.find(c => c.id === state.currentChatId).messages.forEach(msg => {
                 const div = document.createElement('div');
                 div.id = msg.id || '';
                 div.className = `flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} mb-4`;
                 div.innerHTML = `
-                    <div class="max-w-[85%] px-4 py-2 rounded-2xl ${msg.role === 'user' ? 'bg-gray-100 dark:bg-gray-800' : ''}">
-                        ${msg.role === 'assistant' ? '<div class="text-xs font-bold text-blue-500 mb-1">AI</div>' : ''}
+                    <div class="max-w-[85%] px-4 py-2 rounded-2xl ${msg.role === 'user' ? 'bg-gray-100 dark:bg-gray-800' : 'relative'}">
+                        ${msg.role === 'assistant' ? `
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-xs font-bold text-blue-500">SARA</span>
+                                <button onclick="app.speakText(\`${msg.content.replace(/`/g, '\\`').replace(/\n/g, ' ')}\`)" class="p-1 px-2 bg-gray-200 dark:bg-gray-700 rounded-md text-[10px] hover:bg-blue-500 hover:text-white transition-all">
+                                    <i class="fas fa-volume-up"></i> Speak
+                                </button>
+                            </div>` : ''}
                         <div class="prose dark:prose-invert text-sm ${msg.pending ? 'cursor-blink' : ''}">${marked.parse(msg.content || '')}</div>
                     </div>`;
                 els.messagesContainer.appendChild(div);
-                div.querySelectorAll('pre code').forEach(b => highlight.highlightElement(b));
             });
             els.messagesContainer.scrollTop = els.messagesContainer.scrollHeight;
         }
 
-        return { init, toggleDarkMode, toggleSidebar, openSettings, closeSettings, saveSettings, createNewChat, sendMessage, testVoice };
+        return { init, toggleDarkMode, toggleSidebar, openSettings, closeSettings, saveSettings, createNewChat, sendMessage, speakText, deleteChat, renameChat, selectChat: (id) => { state.currentChatId = id; renderChatList(); renderMessages(); } };
     })();
-
     document.addEventListener('DOMContentLoaded', app.init);
 </script>
 </body>
