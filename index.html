@@ -131,6 +131,26 @@
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">System Prompt</label>
                     <textarea id="setting-system-prompt" rows="3" placeholder="Aap ek AI ladki Sara hain..." class="w-full p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
                 </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Sara's Voice</label>
+                    <div class="flex gap-2">
+                        <select id="setting-voice" class="flex-1 p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">Loading All Voices...</option>
+                        </select>
+                        <button onclick="app.testVoice()" class="p-3 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600" title="Test Voice">
+                            <i class="fas fa-volume-up"></i>
+                        </button>
+                    </div>
+                    <div class="flex items-center mt-2 justify-between">
+                        <div class="flex items-center">
+                            <input type="checkbox" id="setting-voice-enabled" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500">
+                            <label for="setting-voice-enabled" class="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">Enable Voice</label>
+                        </div>
+                        <a href="https://play.google.com/store/apps/details?id=com.google.android.tts" target="_blank" class="text-xs text-blue-500 hover:underline">Install Voice Pack</a>
+                    </div>
+                </div>
+
                 <div>
                     <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Model ID</label>
                     <input type="text" id="setting-model" value="deepseek/deepseek-r1:free" class="w-full p-3 rounded-lg bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500">
@@ -168,15 +188,25 @@
             settingsInputs: {
                 apiKey: document.getElementById('setting-api-key'),
                 prompt: document.getElementById('setting-system-prompt'),
-                model: document.getElementById('setting-model')
+                model: document.getElementById('setting-model'),
+                voice: document.getElementById('setting-voice'),
+                voiceEnabled: document.getElementById('setting-voice-enabled')
             }
         };
 
         let state = {
             chats: [],
             currentChatId: null,
-            settings: { apiKey: '', systemPrompt: '', model: 'deepseek/deepseek-r1:free', darkMode: false },
-            isGenerating: false
+            settings: { 
+                apiKey: '', 
+                systemPrompt: '', 
+                model: 'deepseek/deepseek-r1:free', 
+                darkMode: false,
+                voiceURI: '',
+                voiceEnabled: true
+            },
+            isGenerating: false,
+            availableVoices: []
         };
 
         function init() {
@@ -188,10 +218,87 @@
             applyTheme();
             renderChatList();
             renderMessages();
+            initVoiceSystem(); 
             setTimeout(() => {
                 els.loading.classList.add('hidden');
                 els.app.classList.remove('hidden', 'opacity-0');
             }, 500);
+        }
+
+        // Voice System Logic - UPDATED: Shows ALL voices
+        function initVoiceSystem() {
+            const populateVoices = () => {
+                const allVoices = window.speechSynthesis.getVoices();
+                
+                // Sort to bring English/Google voices to top, but include EVERYONE
+                allVoices.sort((a, b) => {
+                    const aScore = (a.name.includes('Google') || a.name.includes('Female') || a.lang.includes('en-US')) ? 1 : 0;
+                    const bScore = (b.name.includes('Google') || b.name.includes('Female') || b.lang.includes('en-US')) ? 1 : 0;
+                    return bScore - aScore;
+                });
+
+                state.availableVoices = allVoices; 
+                
+                els.settingsInputs.voice.innerHTML = '';
+                
+                if (state.availableVoices.length === 0) {
+                     const opt = document.createElement('option');
+                     opt.text = "No Voices Found (Install Google TTS)";
+                     els.settingsInputs.voice.appendChild(opt);
+                     return;
+                }
+
+                state.availableVoices.forEach(v => {
+                    const opt = document.createElement('option');
+                    opt.value = v.voiceURI;
+                    // Add emoji if it looks like a high quality voice
+                    let prefix = "";
+                    if(v.name.includes("Google") || v.name.includes("Siri")) prefix = "⭐ ";
+                    opt.text = `${prefix}${v.name} (${v.lang})`;
+                    els.settingsInputs.voice.appendChild(opt);
+                });
+
+                // Set saved voice or default
+                if (state.settings.voiceURI && state.availableVoices.find(v => v.voiceURI === state.settings.voiceURI)) {
+                    els.settingsInputs.voice.value = state.settings.voiceURI;
+                }
+            };
+
+            window.speechSynthesis.onvoiceschanged = populateVoices;
+            populateVoices(); // Try immediately too
+        }
+
+        function testVoice() {
+            const voiceURI = els.settingsInputs.voice.value;
+            const voice = state.availableVoices.find(v => v.voiceURI === voiceURI);
+            if (!voice) return alert("Please select a voice first. If empty, install 'Speech Services by Google' from Play Store.");
+            
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance("Hello Sir, I am Sara. Do you like this voice?");
+            utterance.voice = voice;
+            
+            // Adjust pitch to make it sound slightly more feminine if generic voice
+            utterance.pitch = 1.1; 
+            utterance.rate = 1.0;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        function speakText(text) {
+            if (!state.settings.voiceEnabled || !text) return;
+
+            const cleanText = text.replace(/[*#`_\[\]]/g, '').substring(0, 300); // Limit length for stability
+            
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(cleanText);
+            
+            const voice = state.availableVoices.find(v => v.voiceURI === state.settings.voiceURI);
+            if (voice) utterance.voice = voice;
+            
+            // Tweak pitch/rate for better female effect on robotic voices
+            utterance.pitch = 1.15; // Higher pitch = more feminine
+            utterance.rate = 1.05;  // Slightly faster
+            
+            window.speechSynthesis.speak(utterance);
         }
 
         function saveState() {
@@ -223,9 +330,14 @@
             els.settingsInputs.apiKey.value = state.settings.apiKey;
             els.settingsInputs.prompt.value = state.settings.systemPrompt;
             els.settingsInputs.model.value = state.settings.model;
+            els.settingsInputs.voice.value = state.settings.voiceURI;
+            els.settingsInputs.voiceEnabled.checked = state.settings.voiceEnabled;
+
             els.modals.settings.classList.remove('hidden');
             setTimeout(() => els.modals.content.classList.replace('scale-95', 'scale-100'), 10);
             setTimeout(() => els.modals.content.classList.replace('opacity-0', 'opacity-100'), 10);
+            
+            if(state.availableVoices.length === 0) initVoiceSystem();
         }
 
         function closeSettings() {
@@ -238,6 +350,8 @@
             state.settings.apiKey = els.settingsInputs.apiKey.value.trim();
             state.settings.systemPrompt = els.settingsInputs.prompt.value.trim();
             state.settings.model = els.settingsInputs.model.value.trim();
+            state.settings.voiceURI = els.settingsInputs.voice.value;
+            state.settings.voiceEnabled = els.settingsInputs.voiceEnabled.checked;
             saveState();
             closeSettings();
             renderMessages();
@@ -256,6 +370,8 @@
             const text = els.input.value.trim();
             if (!text || state.isGenerating) return;
             if (!state.settings.apiKey) return alert("Please enter API Key in Settings!");
+            
+            window.speechSynthesis.cancel();
 
             if (!state.currentChatId) createNewChat();
             const chat = state.chats.find(c => c.id === state.currentChatId);
@@ -302,6 +418,9 @@
                         }
                     }
                 }
+                
+                speakText(aiMsg.content);
+
             } catch (err) {
                 aiMsg.content = "Error: " + err.message;
             } finally {
@@ -345,7 +464,7 @@
             els.messagesContainer.scrollTop = els.messagesContainer.scrollHeight;
         }
 
-        return { init, toggleDarkMode, toggleSidebar, openSettings, closeSettings, saveSettings, createNewChat, sendMessage };
+        return { init, toggleDarkMode, toggleSidebar, openSettings, closeSettings, saveSettings, createNewChat, sendMessage, testVoice };
     })();
 
     document.addEventListener('DOMContentLoaded', app.init);
